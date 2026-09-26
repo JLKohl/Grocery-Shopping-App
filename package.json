@@ -1,0 +1,11 @@
+{
+  "name": "split-cart",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Split a grocery list between Walmart and Sam's Club for the lowest total cost.",
+  "scripts": {
+    "test": "node --test",
+    "build": "node scripts/build-artifact.js"
+  },
+  "license": "MIT"
+}
