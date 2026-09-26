@@ -2,35 +2,33 @@
 
 Paste your grocery list into a page on your computer and click **Shop**. Claude Code opens Chrome, compares prices at **Walmart** and **Sam's Club**, and puts each item in the cart of the cheaper store. It starts from your past purchases so you get your usual brands. It never checks out: when it's done you review each cart and place the orders.
 
-## What you need
+## Install on your Mac (once)
 
-- Node.js 18 or newer
-- Claude Code, signed in (`claude --version` works in a terminal)
-- Google Chrome
+You need Node.js, Claude Code (signed in) and Google Chrome.
 
-## Set up (once)
+1. Download this project: on GitHub, switch to this branch, click **Code → Download ZIP**, and double-click the ZIP to unzip it.
+2. Open **Terminal** (press ⌘-Space, type Terminal, press Return).
+3. Type `bash ` (with a space after it). Then drag `install.sh` from the unzipped folder's `mac` folder into the Terminal window and press Return.
 
-1. Download this project: on GitHub, choose **Code → Download ZIP** and unzip it, or `git clone` it.
-2. Open a terminal in the project folder and run:
-   ```sh
-   npm install
-   npm run login
-   ```
-3. A Chrome window opens with Walmart and Sam's Club sign-in pages. Sign in to both (tick "Keep me signed in"), then close the window.
+The installer puts **Grocery Shopper** in your Applications folder and opens it. You can delete the downloaded folder afterwards. To update later, download the new version and run the installer again. Your store sign-ins are kept.
 
-This Chrome window uses its own profile, kept in `shopper/.chrome-profile`. It doesn't touch your everyday Chrome, and you'll stay signed in there for future runs.
+## Use it
 
-## Shop
-
-```sh
-npm run shop
-```
-
-The page opens at http://localhost:4321. Paste your list, add any notes ("paper goods at Sam's", "organic strawberries") and click **Shop**. Leave the Chrome window alone while it works. A 20-item list usually takes 10 to 15 minutes.
+1. Open **Grocery Shopper** from Launchpad or Spotlight. It opens a page in your browser.
+2. The first time, click **Sign in to stores**. Sign in to Walmart and Sam's Club in the Chrome window that opens (tick "Keep me signed in"), then close that window.
+3. Paste your list, add any notes ("paper goods at Sam's", "organic strawberries") and click **Shop**. Leave the Chrome window alone while it works. A 20-item list usually takes 10 to 15 minutes.
+4. When it finishes, the page lists what went in each cart and anything it couldn't find. Use the **Review cart** buttons to check and place your orders.
 
 - If the page says **Needs you**, a store is showing a "press and hold" robot check. Complete it in the Chrome window and Claude carries on.
-- When it finishes, the page lists what went in each cart and anything it couldn't find. Use the **Review cart** buttons to check and place your orders.
-- To change how Claude shops (brands, bulk rules, the $50 Sam's minimum), edit `shopper/instructions.md`.
+- To change how Claude shops (brands, bulk rules, the $50 Sam's minimum), edit `~/Library/Application Support/Grocery Shopper/shopper/instructions.md`.
+- The app runs quietly in the background and quits itself after an hour of not being used. If something goes wrong, details are in `~/Library/Logs/Grocery Shopper.log`.
+- To remove everything, run `bash ~/Library/Application\ Support/Grocery\ Shopper/mac/uninstall.sh` in Terminal.
+
+The shopping Chrome window uses its own profile, so it doesn't touch your everyday Chrome.
+
+### Without the Mac app
+
+In the project folder: `npm install`, then `npm run shop`. This works on Windows and Linux too.
 
 ### Good to know
 

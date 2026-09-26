@@ -13,6 +13,18 @@ const MCP_CONFIG = '.mcp.generated.json';
 const isWindows = process.platform === 'win32';
 
 let current = null; // the running Claude Code process, if any
+let loginChild = null; // the sign-in Chrome window, if open
+let loginError = ''; // why the last sign-in window failed to open, if it did
+let lastActivity = Date.now();
+
+// The Mac app starts this server in the background. It quits by itself after
+// a stretch with no page activity so it doesn't linger forever.
+const IDLE_EXIT_MINUTES = Number(process.env.SHOPPER_IDLE_EXIT_MINUTES) || 0;
+if (IDLE_EXIT_MINUTES) {
+  setInterval(() => {
+    if (!current && !loginChild && Date.now() - lastActivity > IDLE_EXIT_MINUTES * 60000) process.exit(0);
+  }, 60000).unref();
+}
 
 function writeMcpConfig() {
   const config = {
@@ -79,9 +91,13 @@ function stopCurrent() {
 }
 
 function shop(req, res, body) {
-  if (current) {
+  if (current || loginChild) {
     res.writeHead(409, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'A shopping run is already going. Stop it first.' }));
+    res.end(JSON.stringify({
+      error: current
+        ? 'A shopping run is already going. Stop it first.'
+        : 'Close the sign-in Chrome window first, then click Shop again.',
+    }));
     return;
   }
   const list = String(body.list || '');
@@ -204,7 +220,31 @@ function readJson(req) {
   });
 }
 
+function startLogin(res) {
+  const reply = (code, obj) => {
+    res.writeHead(code, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(obj));
+  };
+  if (current) return reply(409, { error: 'Wait for the shopping run to finish, or stop it, before signing in.' });
+  if (loginChild) return reply(200, { ok: true });
+  const child = spawn(process.execPath, [path.join(HERE, 'login.js')], { cwd: HERE, stdio: ['ignore', 'ignore', 'pipe'] });
+  loginChild = child;
+  loginError = '';
+  let stderr = '';
+  child.stderr.on('data', (c) => { stderr += c; });
+  child.on('close', (code) => {
+    if (loginChild === child) loginChild = null;
+    if (code) {
+      console.error(stderr.trim());
+      loginError = stderr.trim().split('\n')[0] || "Couldn't open Google Chrome.";
+    }
+  });
+  child.on('error', () => { if (loginChild === child) loginChild = null; });
+  reply(200, { ok: true });
+}
+
 const server = http.createServer(async (req, res) => {
+  lastActivity = Date.now();
   // Only answer this computer's own page, never other websites.
   const host = req.headers.host || '';
   if (host !== `localhost:${PORT}` && host !== `127.0.0.1:${PORT}`) {
@@ -219,12 +259,27 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === 'POST' && (req.url === '/api/shop' || req.url === '/api/stop')) {
+  if (req.method === 'GET' && req.url === '/api/state') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({
+      signedInBefore: fs.existsSync(path.join(PROFILE_DIR, '.signed-in')),
+      signingIn: Boolean(loginChild),
+      signInError: loginError,
+      shopping: Boolean(current),
+    }));
+    return;
+  }
+
+  if (req.method === 'POST' && ['/api/shop', '/api/stop', '/api/login'].includes(req.url)) {
     // A JSON content type forces a CORS preflight, which this server never
     // approves, so other sites can't start or stop a run.
     if (!String(req.headers['content-type'] || '').startsWith('application/json')) {
       res.writeHead(415);
       res.end();
+      return;
+    }
+    if (req.url === '/api/login') {
+      startLogin(res);
       return;
     }
     if (req.url === '/api/stop') {
@@ -253,8 +308,8 @@ server.listen(PORT, '127.0.0.1', () => {
   const url = `http://localhost:${PORT}`;
   console.log(`Grocery Shopper is running at ${url}`);
   console.log('Keep this window open while you shop. Press Ctrl+C to quit.');
-  if (!fs.existsSync(PROFILE_DIR)) {
-    console.log('\nFirst time? Run `npm run login` in another terminal to sign in to Walmart and Sam\'s Club.');
+  if (!fs.existsSync(path.join(PROFILE_DIR, '.signed-in'))) {
+    console.log('\nFirst time? Click "Sign in to stores" on the page.');
   }
   const opener = isWindows ? ['cmd', ['/c', 'start', '', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
   execFile(opener[0], opener[1], () => {});

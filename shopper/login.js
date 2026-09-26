@@ -1,5 +1,6 @@
 // Opens the shopping Chrome profile so you can sign in to Walmart and
 // Sam's Club once. Run with `npm run login`, sign in, then close the window.
+const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright-core');
 
@@ -28,5 +29,6 @@ const PROFILE_DIR = path.join(__dirname, '.chrome-profile');
   console.log('Sign in to Walmart and Sam\'s Club in the Chrome window (one tab each).');
   console.log('Tick "Keep me signed in" if you see it. Close the Chrome window when you\'re done.');
   await new Promise((resolve) => context.on('close', resolve));
+  fs.writeFileSync(path.join(PROFILE_DIR, '.signed-in'), new Date().toISOString());
   console.log('Saved. You can now run `npm run shop`.');
 })();
