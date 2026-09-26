@@ -1,10 +1,12 @@
 // Grocery Shopper: a small local web page that hands your grocery list to
-// Claude Code, which fills your Walmart and Sam's Club carts in a Chrome
-// window on this computer. Start it with `npm run shop`.
+// Claude Code in a Chrome window on this computer. Claude looks up prices at
+// Walmart and Sam's Club, plan.js picks the cheaper store for each item, and
+// Claude then fills both carts. Start it with `npm run shop`.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn, execFile } = require('child_process');
+const { buildPlan, cartInstructions } = require('./plan.js');
 
 const PORT = Number(process.env.PORT) || 4321;
 const HERE = __dirname;
@@ -41,11 +43,9 @@ function writeMcpConfig() {
   fs.writeFileSync(path.join(HERE, MCP_CONFIG), JSON.stringify(config, null, 2));
 }
 
-function buildPrompt(list, notes) {
-  const template = fs.readFileSync(path.join(HERE, 'instructions.md'), 'utf8');
-  return template
-    .replace('{{LIST}}', () => list.trim())
-    .replace('{{NOTES}}', () => (notes && notes.trim()) || 'None.');
+function fillTemplate(file, values) {
+  const template = fs.readFileSync(path.join(HERE, file), 'utf8');
+  return template.replace(/\{\{(\w+)\}\}/g, (m, key) => (key in values ? values[key] : m));
 }
 
 const FRIENDLY = {
@@ -71,7 +71,7 @@ function describeTool(name, input) {
   }
 }
 
-function extractSummary(text) {
+function extractJson(text) {
   const blocks = [...String(text || '').matchAll(/```json\s*([\s\S]*?)```/g)];
   for (let i = blocks.length - 1; i >= 0; i--) {
     try {
@@ -90,7 +90,90 @@ function stopCurrent() {
   else child.kill('SIGTERM');
 }
 
-function shop(req, res, body) {
+/**
+ * Runs one Claude Code turn with only the browser tool, streaming its steps
+ * to `send`. Resolves to { text, sessionId } or rejects with a readable error.
+ */
+function runClaude(prompt, send, resumeId) {
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-p',
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--mcp-config', MCP_CONFIG,
+      '--strict-mcp-config',
+      '--allowedTools', 'mcp__playwright',
+    ];
+    if (resumeId) args.push('--resume', resumeId);
+    // The prompt goes in through stdin so newlines and quotes survive on every OS.
+    const child = spawn('claude', args, { cwd: HERE, shell: isWindows, stdio: ['pipe', 'pipe', 'pipe'] });
+    current = child;
+    child.stdin.end(prompt);
+
+    let buffer = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      fn(value);
+    };
+
+    child.stdout.on('data', (chunk) => {
+      buffer += chunk;
+      let nl;
+      while ((nl = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line) continue;
+        let msg;
+        try {
+          msg = JSON.parse(line);
+        } catch (e) {
+          continue;
+        }
+        handle(msg);
+      }
+    });
+
+    function handle(msg) {
+      if (msg.type === 'system' && msg.subtype === 'init') {
+        const pw = (msg.mcp_servers || []).find((sv) => sv.name === 'playwright');
+        if (pw && pw.status !== 'connected') {
+          finish(reject, new Error(`The browser tool didn't start (status: ${pw.status}). Make sure Google Chrome is installed, then try again.`));
+          stopCurrent();
+        }
+      } else if (msg.type === 'assistant' && msg.message && Array.isArray(msg.message.content)) {
+        for (const part of msg.message.content) {
+          if (part.type === 'tool_use') send({ kind: 'step', text: describeTool(part.name, part.input) });
+          else if (part.type === 'text' && part.text.trim()) {
+            const text = part.text.replace(/```json[\s\S]*?```/g, '').trim();
+            if (text) send({ kind: 'say', text, attention: /ACTION NEEDED/i.test(text) });
+          }
+        }
+      } else if (msg.type === 'result') {
+        if (msg.is_error) finish(reject, new Error(msg.result || 'Claude Code reported an error.'));
+        else finish(resolve, { text: msg.result || '', sessionId: msg.session_id });
+      }
+    }
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.on('error', (err) => {
+      finish(reject, new Error(err.code === 'ENOENT'
+        ? "Couldn't find the `claude` command. Check that Claude Code is installed and that `claude --version` works in a terminal."
+        : `Couldn't start Claude Code: ${err.message}`));
+    });
+    child.on('close', (code, signal) => {
+      if (current === child) current = null;
+      const why = signal || code === null ? 'Stopped.' : `Claude Code exited early (code ${code}).`;
+      finish(reject, new Error([why, stderr.trim().split('\n').slice(-5).join('\n')].filter(Boolean).join('\n')));
+    });
+  });
+}
+
+async function shop(req, res, body) {
   if (current || loginChild) {
     res.writeHead(409, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -108,99 +191,48 @@ function shop(req, res, body) {
   }
 
   res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-cache' });
-  const send = (event) => res.write(JSON.stringify(event) + '\n');
-
-  writeMcpConfig();
-  const args = [
-    '-p',
-    '--output-format', 'stream-json',
-    '--verbose',
-    '--mcp-config', MCP_CONFIG,
-    '--strict-mcp-config',
-    '--allowedTools', 'mcp__playwright',
-  ];
-  // The prompt goes in through stdin so newlines and quotes survive on every OS.
-  const child = spawn('claude', args, { cwd: HERE, shell: isWindows, stdio: ['pipe', 'pipe', 'pipe'] });
-  current = child;
-  send({ kind: 'status', text: 'Starting Claude Code and Chrome…' });
-
-  child.stdin.end(buildPrompt(list, body.notes));
-
-  let buffer = '';
-  let stderr = '';
-  let finished = false;
-
-  child.stdout.on('data', (chunk) => {
-    buffer += chunk;
-    let nl;
-    while ((nl = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, nl).trim();
-      buffer = buffer.slice(nl + 1);
-      if (!line) continue;
-      let msg;
-      try {
-        msg = JSON.parse(line);
-      } catch (e) {
-        continue;
-      }
-      handleMessage(msg);
-    }
-  });
-
-  function handleMessage(msg) {
-    if (msg.type === 'system' && msg.subtype === 'init') {
-      const pw = (msg.mcp_servers || []).find((s) => s.name === 'playwright');
-      if (pw && pw.status !== 'connected') {
-        send({ kind: 'error', text: `The browser tool didn't start (status: ${pw.status}). Make sure Google Chrome is installed, then try again.` });
-      } else {
-        send({ kind: 'status', text: 'Claude Code is shopping. Watch the Chrome window.' });
-      }
-    } else if (msg.type === 'assistant' && msg.message && Array.isArray(msg.message.content)) {
-      for (const part of msg.message.content) {
-        if (part.type === 'tool_use') send({ kind: 'step', text: describeTool(part.name, part.input) });
-        else if (part.type === 'text' && part.text.trim()) {
-          const text = part.text.replace(/```json[\s\S]*?```/g, '').trim();
-          if (text) send({ kind: 'say', text, attention: /ACTION NEEDED/i.test(text) });
-        }
-      }
-    } else if (msg.type === 'result') {
-      finished = true;
-      send({
-        kind: 'done',
-        ok: !msg.is_error,
-        text: msg.result || '',
-        summary: extractSummary(msg.result),
-      });
-    }
-  }
-
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-
-  child.on('error', (err) => {
-    finished = true;
-    send({
-      kind: 'error',
-      text: err.code === 'ENOENT'
-        ? "Couldn't find the `claude` command. Check that Claude Code is installed and that `claude --version` works in a terminal."
-        : `Couldn't start Claude Code: ${err.message}`,
-    });
-  });
-
-  child.on('close', (code, signal) => {
-    if (current === child) current = null;
-    if (!finished) {
-      const why = signal || code === null ? 'Stopped.' : `Claude Code exited early (code ${code}).`;
-      send({ kind: 'error', text: [why, stderr.trim().split('\n').slice(-5).join('\n')].filter(Boolean).join('\n') });
-    }
-    res.end();
-  });
-
+  let open = true;
+  const send = (event) => {
+    if (open) res.write(JSON.stringify(event) + '\n');
+  };
   // Stop Claude if the page is closed mid-run.
   res.on('close', () => {
-    if (current === child && !finished) stopCurrent();
+    open = false;
+    stopCurrent();
   });
+
+  writeMcpConfig();
+  try {
+    send({ kind: 'status', text: 'Step 1 of 2: checking prices at both stores…' });
+    const gathered = await runClaude(
+      fillTemplate('gather.md', { LIST: list.trim(), NOTES: String(body.notes || '').trim() || 'None.' }),
+      send,
+    );
+    if (!open) return;
+    const prices = extractJson(gathered.text);
+    if (!prices || !Array.isArray(prices.items)) {
+      throw new Error("Claude didn't return prices in the expected format. Here's what it said:\n\n" + gathered.text.slice(0, 1500));
+    }
+
+    const plan = buildPlan(prices, body.settings);
+    send({ kind: 'plan', plan });
+    if (!plan.lines.length) {
+      send({ kind: 'done', ok: true, report: null });
+      return;
+    }
+
+    send({ kind: 'status', text: 'Step 2 of 2: adding items to your carts…' });
+    const filled = await runClaude(
+      fillTemplate('fill.md', { PLAN: cartInstructions(plan) }),
+      send,
+      gathered.sessionId,
+    );
+    send({ kind: 'done', ok: true, report: extractJson(filled.text), text: filled.text });
+  } catch (err) {
+    send({ kind: 'error', text: err.message });
+  } finally {
+    if (open) res.end();
+  }
 }
 
 function readJson(req) {

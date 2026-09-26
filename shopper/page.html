@@ -70,6 +70,42 @@ textarea { width: 100%; background: var(--sunk); border: 1px solid var(--line); 
 .cart a.btn { text-decoration: none; text-align: center; }
 .notice { background: var(--warn-soft); border-radius: 8px; padding: 12px 14px; display: grid; gap: 4px; }
 .linkbtn { border: 0; background: none; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+details.fees { display: grid; gap: 10px; font-size: 14px; }
+details.fees summary { cursor: pointer; font-weight: 600; }
+details.fees[open] summary { margin-bottom: 8px; }
+details.fees fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 12px; margin: 0 0 10px; display: grid; gap: 8px; }
+details.fees legend { font-weight: 600; padding: 0 4px; }
+details.fees label { font-weight: 400; font-size: 13px; color: var(--muted); }
+details.fees label.check { display: flex; gap: 8px; align-items: center; color: var(--ink); font-size: 14px; }
+.fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+input[type="number"] { width: 100%; border: 1px solid var(--line); background: var(--surface); color: inherit; border-radius: 6px; padding: 5px 8px; font: 14px var(--mono); min-width: 0; }
+.summary-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+.big { font-family: var(--display); font-weight: 800; font-size: clamp(34px, 6vw, 48px); letter-spacing: -0.02em; line-height: 1; }
+.saving { padding: 3px 10px; border-radius: 999px; background: var(--good-soft); color: var(--good); font-weight: 600; font-size: 14px; }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.compare > div { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
+.compare b { font: 600 18px var(--mono); color: var(--ink); }
+.compare .wm b { color: var(--wm); } .compare .sc b { color: var(--sc); }
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 14px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+thead th { background: var(--sunk); font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+th.wm { color: var(--wm); } th.sc { color: var(--sc); }
+td.offer { width: 34%; }
+td.offer .p { font-size: 13px; }
+td.offer .c { font: 600 14px var(--mono); }
+td.offer .u { font: 12px var(--mono); color: var(--muted); }
+td.offer.win { background: var(--good-soft); }
+td.offer.win .c::after { content: " ✓ buying here"; font: 600 12px var(--body); color: var(--good); }
+td a { color: inherit; }
+td.item { min-width: 170px; }
+.compare b.na { font: 500 13px var(--body); color: var(--muted); }
+td.none { color: var(--muted); font-size: 13px; }
+td .hint { display: block; font-size: 12px; color: var(--warn); margin-top: 4px; }
+.cartstate { font-size: 13px; white-space: nowrap; }
+.cartstate.ok { color: var(--good); font-weight: 600; }
+.cartstate.bad { color: var(--bad); font-weight: 600; }
+.cartstate.wait { color: var(--muted); }
 .notice ul { margin: 0; padding-left: 20px; }
 </style>
 </head>
@@ -77,7 +113,7 @@ textarea { width: 100%; background: var(--sunk); border: 1px solid var(--line); 
 <div class="wrap">
   <header>
     <h1>Grocery Shopper</h1>
-    <p class="muted">Paste your list and click Shop. Claude Code fills your Walmart and Sam's Club carts in a Chrome window, picking the cheaper store for each item. It never checks out. You review each cart and place the orders.</p>
+    <p class="muted">Paste your list and click Shop. Claude Code checks prices at Walmart and Sam's Club in a Chrome window, the cheapest plan is worked out for you (fees included), and Claude fills both carts. It never checks out. You review each cart and place the orders.</p>
   </header>
 
   <section class="notice" id="signin-banner" hidden>
@@ -92,6 +128,27 @@ textarea { width: 100%; background: var(--sunk); border: 1px solid var(--line); 
       <textarea id="list" spellcheck="false" placeholder="milk&#10;eggs&#10;bananas&#10;paper towels"></textarea>
       <label for="notes">Notes for this trip <span>Optional. For example, "paper goods at Sam's" or "organic berries".</span></label>
       <textarea id="notes"></textarea>
+      <details class="fees">
+        <summary>Fees and minimums</summary>
+        <p class="muted" style="font-size: 13px">Used to decide whether splitting the order is worth it. Set them to match your memberships.</p>
+        <fieldset>
+          <legend>Walmart</legend>
+          <label class="check"><input type="checkbox" id="wm-on" checked> Shop here</label>
+          <div class="fgrid">
+            <label>Order minimum ($)<input type="number" id="wm-min" min="0" step="1" value="35"></label>
+            <label>Fee under minimum ($)<input type="number" id="wm-fee" min="0" step="0.01" value="6.99"></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Sam's Club</legend>
+          <label class="check"><input type="checkbox" id="sc-on" checked> Shop here</label>
+          <div class="fgrid">
+            <label>Order minimum ($)<input type="number" id="sc-min" min="0" step="1" value="50"></label>
+            <label>Fee under minimum ($)<input type="number" id="sc-fee" min="0" step="0.01" value="12"></label>
+          </div>
+        </fieldset>
+        <label>Only use both stores if it saves at least ($)<input type="number" id="hassle" min="0" step="0.5" value="3"></label>
+      </details>
       <div class="row">
         <button class="btn primary" id="shop" type="button">Shop</button>
         <button class="btn" id="stop" type="button" disabled>Stop</button>
@@ -106,9 +163,9 @@ textarea { width: 100%; background: var(--sunk); border: 1px solid var(--line); 
           <p class="muted">Progress shows up here. The first run can take a minute to start while the browser tool downloads.</p>
         </div>
       </section>
-      <div id="results" class="stack"></div>
     </div>
   </div>
+  <div id="results" class="stack"></div>
 </div>
 
 <script>
@@ -138,25 +195,136 @@ textarea { width: 100%; background: var(--sunk); border: 1px solid var(--line); 
     $('log').scrollTop = $('log').scrollHeight;
   }
 
-  function renderResults(summary, text) {
-    if (!summary) {
-      $('results').innerHTML = `<section class="panel"><h2>Claude's report</h2><p style="white-space: pre-wrap">${esc(text)}</p></section>`;
+  /* ---------- Fees and minimums ---------- */
+  const SETTING_IDS = ['wm-on', 'wm-min', 'wm-fee', 'sc-on', 'sc-min', 'sc-fee', 'hassle'];
+  try {
+    const saved = JSON.parse(localStorage.getItem('shopper-settings') || '{}');
+    for (const id of SETTING_IDS) {
+      if (!(id in saved)) continue;
+      if ($(id).type === 'checkbox') $(id).checked = saved[id];
+      else $(id).value = saved[id];
+    }
+  } catch (e) {}
+  for (const id of SETTING_IDS) {
+    $(id).addEventListener('input', () => {
+      const out = {};
+      for (const k of SETTING_IDS) out[k] = $(k).type === 'checkbox' ? $(k).checked : $(k).value;
+      try { localStorage.setItem('shopper-settings', JSON.stringify(out)); } catch (e) {}
+    });
+  }
+  function readSettings() {
+    const n = (id) => parseFloat($(id).value);
+    return {
+      splitHassle: n('hassle'),
+      stores: {
+        walmart: { enabled: $('wm-on').checked, minimum: n('wm-min'), feeBelow: n('wm-fee'), feeAbove: 0 },
+        sams: { enabled: $('sc-on').checked, minimum: n('sc-min'), feeBelow: n('sc-fee'), feeAbove: 0 },
+      },
+    };
+  }
+
+  /* ---------- Plan and report ---------- */
+  const qty = (n) => String(Math.round(n * 100) / 100);
+  const keyOf = (store, item) => store + '|' + String(item || '').trim().toLowerCase();
+  let lastPlan = null;
+
+  function offerCell(line, s) {
+    const o = line.offers[s];
+    if (!o) return `<td class="offer none">Not found</td>`;
+    const name = o.url ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.product || line.item)}</a>` : esc(o.product || line.item);
+    return `<td class="offer ${line.store === s ? 'win' : ''}">
+      <div class="p">${name}</div>
+      <div class="c">${o.packs} × ${money(o.price)} = ${money(o.cost)}</div>
+      <div class="u">${money(o.unitPrice)} per ${esc(line.unit)}</div>
+    </td>`;
+  }
+
+  // When the plan skips the cheaper store for an item, say why.
+  function whyNotCheapest(line) {
+    const other = line.store === 'walmart' ? 'sams' : 'walmart';
+    const mine = line.offers[line.store];
+    const theirs = line.offers[other];
+    if (!mine || !theirs || theirs.cost >= mine.cost) return '';
+    return `<span class="hint">${CARTS[other].name} is ${money(mine.cost - theirs.cost)} cheaper, but buying at ${CARTS[line.store].name} avoids a small-order fee or an extra store</span>`;
+  }
+
+  function renderPlan(plan) {
+    lastPlan = plan;
+    if (!plan.lines.length) {
+      $('results').innerHTML = `<section class="panel"><h2>No prices found</h2><p class="muted">Claude couldn't price any items on your list.</p>${notFoundHtml(plan.notFound)}</section>`;
       return;
     }
-    const carts = Object.keys(CARTS).map((s) => {
-      const c = summary[s] || { items: [] };
-      const items = c.items || [];
-      return `<section class="panel cart" data-store="${s}">
+    const used = Object.keys(CARTS).filter((s) => plan.stores[s].count);
+    const verdict = used.length === 2
+      ? `Split the order: ${plan.stores.walmart.count} at Walmart, ${plan.stores.sams.count} at Sam's Club.`
+      : `Buy everything at ${CARTS[used[0]].name}.`;
+    const storeBox = (s, cls) => {
+      const st = plan.stores[s];
+      return `<div class="${cls}">${CARTS[s].name}: ${st.count} item${st.count === 1 ? '' : 's'}<b>${money(st.total)}</b>${st.fees ? `includes ${money(st.fees)} fee` : 'no fee'}</div>`;
+    };
+    const single = (s) => plan.singleStore[s] == null ? '<b class="na">Not everything is sold there</b>' : `<b>${money(plan.singleStore[s])}</b>`;
+    $('results').innerHTML = `
+      <section class="panel">
+        <span class="muted" style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase">Cheapest plan</span>
+        <div class="summary-line"><span class="big">${money(plan.total)}</span>${plan.saving >= 0.01 ? `<span class="saving">Saves ${money(plan.saving)} vs. one store</span>` : ''}</div>
+        <p>${esc(verdict)}</p>
+        <div class="compare">
+          ${storeBox('walmart', 'wm')}${storeBox('sams', 'sc')}
+          <div>All at Walmart${single('walmart')}</div>
+          <div>All at Sam's Club${single('sams')}</div>
+        </div>
+        <p class="muted" style="font-size:13px">Prices are what the store sites showed during this run. Totals include the fees you set but not tax or tips.</p>
+      </section>
+      <section class="panel">
+        <h2>Price check</h2>
+        <div class="table-scroll"><table>
+          <thead><tr><th>Item</th><th class="wm">Walmart</th><th class="sc">Sam's Club</th><th>Cart</th></tr></thead>
+          <tbody>${plan.lines.map((l) => `<tr>
+            <td class="item"><b>${esc(l.item)}</b><br><span class="muted" style="font-size:13px">need ${qty(l.need)} ${esc(l.unit)}</span>
+              ${whyNotCheapest(l)}
+              ${l.unitHint ? `<span class="hint">${l.unitHint.percent}% cheaper per ${esc(l.unit)} at ${CARTS[l.unitHint.store].name} in bulk</span>` : ''}</td>
+            ${offerCell(l, 'walmart')}${offerCell(l, 'sams')}
+            <td><span class="cartstate wait" data-key="${esc(keyOf(l.store, l.item))}">${CARTS[l.store].name}: waiting</span></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </section>
+      ${notFoundHtml(plan.notFound)}
+      ${plan.notes ? `<div class="notice"><b>About these prices</b><p>${esc(plan.notes)}</p></div>` : ''}
+      <div id="report" class="stack"></div>`;
+  }
+
+  function notFoundHtml(list) {
+    return list && list.length
+      ? `<div class="notice"><b>Couldn't price</b><ul>${list.map((n) => `<li>${esc(n.item)}${n.reason ? ` (${esc(n.reason)})` : ''}</li>`).join('')}</ul></div>` : '';
+  }
+
+  function renderReport(report, text) {
+    const box = $('report');
+    if (!box) return;
+    if (!report) {
+      box.innerHTML = `<section class="panel"><h2>Claude's report</h2><p style="white-space: pre-wrap">${esc(text || 'No report.')}</p></section>`;
+      return;
+    }
+    for (const a of report.added || []) {
+      const el = document.querySelector(`.cartstate[data-key="${CSS.escape(keyOf(a.store, a.item))}"]`);
+      if (el) { el.className = 'cartstate ok'; el.textContent = `Added ${a.qty || ''} at ${CARTS[a.store] ? CARTS[a.store].name : a.store}`.replace('  ', ' '); }
+    }
+    for (const f of report.failed || []) {
+      const el = document.querySelector(`.cartstate[data-key="${CSS.escape(keyOf(f.store, f.item))}"]`);
+      if (el) { el.className = 'cartstate bad'; el.textContent = 'Not added'; el.title = f.reason || ''; }
+    }
+    document.querySelectorAll('.cartstate.wait').forEach((el) => { el.textContent = 'Not confirmed. Check the cart.'; });
+    const totals = report.cartTotals || {};
+    const stores = Object.keys(CARTS).filter((s) => lastPlan && lastPlan.stores[s].count);
+    box.innerHTML = `
+      <div class="carts">${stores.map((s) => `<section class="panel cart" data-store="${s}">
         <h3>${CARTS[s].name}</h3>
-        ${items.length ? `<ol>${items.map((i) => `<li><span>${esc(i.qty || 1)} × ${esc(i.product || i.item)}</span><span class="price">${money(i.price)}</span>${i.product && i.item ? `<small>for "${esc(i.item)}"</small>` : ''}</li>`).join('')}</ol>` : '<p class="muted">Nothing added here.</p>'}
-        ${c.cartTotal ? `<div class="total"><span>Cart total</span><span>${money(c.cartTotal)}</span></div>` : ''}
-        ${items.length ? `<a class="btn primary" href="${CARTS[s].url}" target="_blank" rel="noopener">Review ${CARTS[s].name} cart</a>` : ''}
-      </section>`;
-    }).join('');
-    const missing = summary.notFound && summary.notFound.length
-      ? `<div class="notice"><b>Couldn't add</b><ul>${summary.notFound.map((n) => `<li>${esc(n.item)}${n.reason ? ` (${esc(n.reason)})` : ''}</li>`).join('')}</ul></div>` : '';
-    const notes = summary.notes ? `<div class="notice"><b>Notes</b><p>${esc(summary.notes)}</p></div>` : '';
-    $('results').innerHTML = `<div class="carts">${carts}</div>${missing}${notes}`;
+        <div class="total"><span>Planned</span><span>${money(lastPlan.stores[s].subtotal)}</span></div>
+        ${typeof totals[s] === 'number' ? `<div class="total"><span>Cart shows</span><span>${money(totals[s])}</span></div>` : ''}
+        <a class="btn primary" href="${CARTS[s].url}" target="_blank" rel="noopener">Review ${CARTS[s].name} cart</a>
+      </section>`).join('')}</div>
+      ${(report.failed || []).length ? `<div class="notice"><b>Couldn't add</b><ul>${report.failed.map((f) => `<li>${esc(f.item)} at ${esc(CARTS[f.store] ? CARTS[f.store].name : f.store)}${f.reason ? ` (${esc(f.reason)})` : ''}</li>`).join('')}</ul></div>` : ''}
+      ${report.notes ? `<div class="notice"><b>Notes</b><p>${esc(report.notes)}</p></div>` : ''}`;
   }
 
   async function shop() {
@@ -169,11 +337,12 @@ textarea { width: 100%; background: var(--sunk); border: 1px solid var(--line); 
     setStatus('running', 'Starting…');
 
     let gotEnd = false;
+    let phase = 'Starting…';
     try {
       const res = await fetch('/api/shop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ list, notes: $('notes').value }),
+        body: JSON.stringify({ list, notes: $('notes').value, settings: readSettings() }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -192,16 +361,21 @@ textarea { width: 100%; background: var(--sunk); border: 1px solid var(--line); 
           buf = buf.slice(nl + 1);
           if (!line.trim()) continue;
           const ev = JSON.parse(line);
-          if (ev.kind === 'status') setStatus('running', ev.text);
+          if (ev.kind === 'status') { phase = ev.text; setStatus('running', ev.text); }
           else if (ev.kind === 'step') log('step', ev.text);
           else if (ev.kind === 'say') {
             log(ev.attention ? 'attention' : 'say', ev.text);
             if (ev.attention) setStatus('error', 'Needs you: check the Chrome window.');
-            else setStatus('running', 'Shopping…');
+            else setStatus('running', phase);
+          } else if (ev.kind === 'plan') {
+            renderPlan(ev.plan);
           } else if (ev.kind === 'done') {
             gotEnd = true;
-            setStatus(ev.ok ? 'done' : 'error', ev.ok ? 'Carts are ready. Review them and place your orders.' : 'Claude Code hit a problem. See below.');
-            renderResults(ev.summary, ev.text);
+            if (ev.report === null && !ev.text) setStatus('error', 'Nothing to add to your carts.');
+            else {
+              setStatus('done', 'Carts are ready. Review them and place your orders.');
+              renderReport(ev.report, ev.text);
+            }
           } else if (ev.kind === 'error') {
             gotEnd = true;
             log('error', ev.text);

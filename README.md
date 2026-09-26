@@ -1,6 +1,13 @@
 # Grocery Shopper
 
-Paste your grocery list into a page on your computer and click **Shop**. Claude Code opens Chrome, compares prices at **Walmart** and **Sam's Club**, and puts each item in the cart of the cheaper store. It starts from your past purchases so you get your usual brands. It never checks out: when it's done you review each cart and place the orders.
+Paste your grocery list into a page on your computer and click **Shop**. It never checks out: when it's done you review each cart and place the orders.
+
+A run has two steps:
+
+1. **Check prices.** Claude Code opens Chrome and looks up each item at **Walmart** and **Sam's Club**. It starts from your past purchases so it prices your usual brands. For each store it records the product, package size, price and link.
+2. **Plan, then fill the carts.** The app's own tested code (`optimizer.js`, via `shopper/plan.js`) picks the store for each item. It counts whole packages, price per unit, each store's order minimum and fee, and your "only split if it saves at least" amount. Claude then adds exactly those products to each cart.
+
+The page shows both stores' prices for every item, which one you're buying and why, and whether it made it into the cart.
 
 ## Install on your Mac (once)
 
@@ -20,7 +27,8 @@ The installer puts **Grocery Shopper** in your Applications folder and opens it.
 4. When it finishes, the page lists what went in each cart and anything it couldn't find. Use the **Review cart** buttons to check and place your orders.
 
 - If the page says **Needs you**, a store is showing a "press and hold" robot check. Complete it in the Chrome window and Claude carries on.
-- To change how Claude shops (brands, bulk rules, the $50 Sam's minimum), edit `~/Library/Application Support/Grocery Shopper/shopper/instructions.md`.
+- Set order minimums and fees under **Fees and minimums** on the page. Defaults: Walmart $6.99 under $35, Sam's Club $12 under $50.
+- To change how Claude picks products (brands, bulk rules), edit `~/Library/Application Support/Grocery Shopper/shopper/gather.md`. How it fills carts is in `fill.md` next to it.
 - The app runs quietly in the background and quits itself after an hour of not being used. If something goes wrong, details are in `~/Library/Logs/Grocery Shopper.log`.
 - To remove everything, run `bash ~/Library/Application\ Support/Grocery\ Shopper/mac/uninstall.sh` in Terminal.
 
@@ -64,4 +72,5 @@ npm run build   # writes dist/split-cart.html, a single-file copy with the optim
 ```
 
 - `optimizer.js`: list parsing, item matching, package math and the store-assignment search. It tries every split for up to 16 items that both stores sell; for longer lists it improves the best single-store and cheapest-per-item plans by moving one item at a time.
-- `index.html`: the app UI.
+- `index.html`: the Split Cart page.
+- `shopper/`: Grocery Shopper. `server.js` runs Claude Code, `plan.js` turns collected prices into a plan, `gather.md` and `fill.md` are the instructions Claude follows.
