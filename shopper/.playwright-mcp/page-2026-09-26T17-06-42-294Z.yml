@@ -1,0 +1,5 @@
+- generic [ref=e1]:
+  - heading "Test Store" [level=1] [ref=e2]
+  - paragraph [ref=e3]: "Milk 1 gal: $3.48"
+  - button "Add to cart" [active] [ref=e4]
+  - paragraph [ref=e5]: "Cart: 1 item"

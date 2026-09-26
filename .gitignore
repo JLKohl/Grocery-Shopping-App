@@ -1,2 +1,4 @@
 node_modules/
 dist/
+shopper/.chrome-profile/
+shopper/.mcp.generated.json

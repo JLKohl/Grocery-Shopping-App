@@ -2,10 +2,15 @@
   "name": "split-cart",
   "version": "1.0.0",
   "private": true,
-  "description": "Split a grocery list between Walmart and Sam's Club for the lowest total cost.",
+  "description": "Fill your Walmart and Sam's Club carts from a grocery list with Claude Code, picking the cheaper store for each item.",
   "scripts": {
+    "shop": "node shopper/server.js",
+    "login": "node shopper/login.js",
     "test": "node --test",
     "build": "node scripts/build-artifact.js"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "playwright-core": "1.63.0"
+  }
 }
